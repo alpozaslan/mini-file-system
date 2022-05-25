@@ -1,3 +1,4 @@
 minifs
 *.o
 *.fat
+.vscode
