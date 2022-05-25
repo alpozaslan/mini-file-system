@@ -169,10 +169,10 @@ bool mini_fat_save(const FAT_FILESYSTEM *fat)
 		perror("Cannot save fat to file");
 		return false;
 	}
+
 	// TODO: save all metadata (filesystem metadata, file metadata).
-	// Write the file name
+	// Set cursor to the beginning of the file
 	fseek(fat_fd, 0, SEEK_SET);
-	fwrite(fat->filename, sizeof(char), strlen(fat->filename), fat_fd);
 
 	// Write the block size
 	fwrite(&fat->block_size, sizeof(fat->block_size), 1, fat_fd);
