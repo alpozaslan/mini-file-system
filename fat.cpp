@@ -27,6 +27,13 @@ int mini_fat_write_in_block(FAT_FILESYSTEM *fs, const int block_id, const int bl
 	int written = 0;
 
 	// TODO: write in the real file.
+	FILE *fd = fopen(fs->filename, "rb+");
+	if (fd == NULL) {
+		return -1;
+	}
+
+	fseek(fd, block_id * fs->block_size + block_offset, SEEK_SET);
+	written = fwrite(buffer, 1, size, fd);
 
 	return written;
 }
@@ -49,6 +56,15 @@ int mini_fat_read_in_block(FAT_FILESYSTEM *fs, const int block_id, const int blo
 	int read = 0;
 
 	// TODO: read from the real file.
+	//open the file
+	FILE * fd = fopen(fs->filename, "rb");
+	if (fd == NULL) {
+		return -1;
+	}
+	// set the file pointer to the block_offset
+	fseek(fd, fs->block_size * block_id + block_offset, SEEK_SET);
+	// read the data
+	read = fread(buffer, 1, size, fd);
 
 	return read;
 }
@@ -60,6 +76,11 @@ int mini_fat_read_in_block(FAT_FILESYSTEM *fs, const int block_id, const int blo
 int mini_fat_find_empty_block(const FAT_FILESYSTEM *fat)
 {
 	// TODO: find an empty block in fat and return its index.
+	for (int i = 0; i < fat->block_count; i++){
+		if(fat->block_map[i] == EMPTY_BLOCK){
+			return i;
+		}
+	}
 
 	return -1;
 }
@@ -163,7 +184,7 @@ FAT_FILESYSTEM *mini_fat_create(const char *filename, const int block_size, cons
  */
 bool mini_fat_save(const FAT_FILESYSTEM *fat)
 {
-	FILE *fat_fd = fopen(fat->filename, "r+");
+	FILE *fat_fd = fopen(fat->filename, "rb+");
 	if (fat_fd == NULL)
 	{
 		perror("Cannot save fat to file");
@@ -183,6 +204,21 @@ bool mini_fat_save(const FAT_FILESYSTEM *fat)
 	// Write the block map
 	fwrite(&fat->block_map[0], sizeof(fat->block_map[0]), fat->block_count, fat_fd);
 
+	//write the file metadata of each file to their corresponding blocks
+	for (int i = 0; i < fat->files.size(); ++i)
+	{	
+		//set the cursor to the beginning of the file
+		fseek(fat_fd, fat->block_size * fat->files[i]->metadata_block_id, SEEK_SET);
+
+		//write the file metadata to the file
+		//write the file name
+		fwrite(fat->files[i]->name, sizeof(fat->files[i]->name), 1, fat_fd);
+		//write the file size
+		fwrite(&fat->files[i]->size, sizeof(fat->files[i]->size), 1, fat_fd);
+		//write the file block map
+		fwrite(&fat->files[i]->block_ids[0], sizeof(fat->files[i]->block_ids[0]), fat->files[i]->block_ids.size(), fat_fd);
+	}
+
 	fclose(fat_fd);
 
 	return true;
@@ -190,17 +226,46 @@ bool mini_fat_save(const FAT_FILESYSTEM *fat)
 
 FAT_FILESYSTEM *mini_fat_load(const char *filename)
 {
-	FILE *fat_fd = fopen(filename, "r+");
+	FILE *fat_fd = fopen(filename, "rb+");
 	if (fat_fd == NULL)
 	{
 		perror("Cannot load fat from file");
 		exit(-1);
 	}
 	// TODO: load all metadata (filesystem metadata, file metadata) and create filesystem.
-	// Read the file name
+	// Read the block size
+	int block_size;
+	fread(&block_size, sizeof(block_size), 1, fat_fd);
+	// Read the block count
+	int block_count;
+	fread(&block_count, sizeof(block_count), 1, fat_fd);
+	// Read the block map
+	std::vector<unsigned char> block_map(block_count);
+	fread(&block_map[0], sizeof(block_map[0]), block_count, fat_fd);
 
-	int block_size = 1024, block_count = 10;
+	// read the file metadata of each file from their corresponding blocks
 	FAT_FILESYSTEM *fat = mini_fat_create_internal(filename, block_size, block_count);
+	fat->block_map = block_map;
+	for (int i = 0; i < fat->block_count; ++i)
+	{
+		if (fat->block_map[i] == FILE_ENTRY_BLOCK)
+		{
+			FAT_FILE *file = new FAT_FILE;
+			fseek(fat_fd, fat->block_size * i, SEEK_SET);
+			//read the file name
+			fread(file->name, sizeof(file->name), 1, fat_fd);
+			//read the file size
+			fread(&file->size, sizeof(file->size), 1, fat_fd);
+			//resize the block_ids vector to the file size
+			file->block_ids.resize(file->size);
+			//read the file block_ids
+			fread(&file->block_ids[0], sizeof(file->block_ids[0]), file->size, fat_fd);
+			//set the metadata block id of the file
+			file->metadata_block_id = i;
+			fat->files.push_back(file);
+		}
+	}
 
+	fclose(fat_fd);
 	return fat;
 }
