@@ -9,6 +9,16 @@
 
 #include <unistd.h>
 
+#define DEBUG 1
+inline void debug(const char * fmt, ...) {
+#if DEBUG>0
+	va_list args;
+   va_start(args, fmt);
+   vprintf(fmt, args);
+   va_end(args);
+#endif
+}
+
 /**
  * Write inside one block in the filesystem.
  * @param  fs           filesystem
@@ -23,7 +33,7 @@ int mini_fat_write_in_block(FAT_FILESYSTEM *fs, const int block_id, const int bl
 	assert(block_offset >= 0);
 	assert(block_offset < fs->block_size);
 	assert(size + block_offset <= fs->block_size);
-
+	//debug("mini_fat_write_in_block: block_id=%d, block_offset=%d, size=%d\n", block_id, block_offset, size);
 	int written = 0;
 
 	// TODO: write in the real file.
@@ -34,6 +44,8 @@ int mini_fat_write_in_block(FAT_FILESYSTEM *fs, const int block_id, const int bl
 
 	fseek(fd, block_id * fs->block_size + block_offset, SEEK_SET);
 	written = fwrite(buffer, 1, size, fd);
+
+	fclose(fd);
 
 	return written;
 }
@@ -95,7 +107,7 @@ int mini_fat_allocate_new_block(FAT_FILESYSTEM *fs, const unsigned char block_ty
 	int new_block_index = mini_fat_find_empty_block(fs);
 	if (new_block_index == -1)
 	{
-		fprintf(stderr, "Cannot allocate block: filesystem is full.\n");
+		printf("Cannot allocate block: filesystem is full.\n");
 		return -1;
 	}
 	fs->block_map[new_block_index] = block_type;
@@ -147,7 +159,7 @@ FAT_FILESYSTEM *mini_fat_create(const char *filename, const int block_size, cons
 	FILE *f = fopen(filename, "wb");
 	if (f == NULL)
 	{
-		fprintf(stderr, "Cannot create file %s.\n", filename);
+		printf("Cannot create file %s.\n", filename);
 		return NULL;
 	}
 
@@ -239,13 +251,14 @@ FAT_FILESYSTEM *mini_fat_load(const char *filename)
 	// Read the block count
 	int block_count;
 	fread(&block_count, sizeof(block_count), 1, fat_fd);
+
+	FAT_FILESYSTEM *fat = mini_fat_create_internal(filename, block_size, block_count);
+
 	// Read the block map
-	std::vector<unsigned char> block_map(block_count);
-	fread(&block_map[0], sizeof(block_map[0]), block_count, fat_fd);
+	fat->block_map.resize(fat->block_count, EMPTY_BLOCK); // Set all blocks to empty.
+	fread(&fat->block_map[0], sizeof(fat->block_map[0]), block_count, fat_fd);
 
 	// read the file metadata of each file from their corresponding blocks
-	FAT_FILESYSTEM *fat = mini_fat_create_internal(filename, block_size, block_count);
-	fat->block_map = block_map;
 	for (int i = 0; i < fat->block_count; ++i)
 	{
 		if (fat->block_map[i] == FILE_ENTRY_BLOCK)
@@ -257,7 +270,7 @@ FAT_FILESYSTEM *mini_fat_load(const char *filename)
 			//read the file size
 			fread(&file->size, sizeof(file->size), 1, fat_fd);
 			//resize the block_ids vector to the file size
-			file->block_ids.resize(file->size);
+			file->block_ids.resize(file->size/fat->block_size);
 			//read the file block_ids
 			fread(&file->block_ids[0], sizeof(file->block_ids[0]), file->size, fat_fd);
 			//set the metadata block id of the file

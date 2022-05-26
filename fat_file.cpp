@@ -1,5 +1,6 @@
 #include "fat.h"
 #include "fat_file.h"
+#include <algorithm>
 
 // Little helper to show debug messages. Set 1 to 0 to silence.
 #define DEBUG 1
@@ -87,7 +88,7 @@ FAT_FILE * mini_file_create_file(FAT_FILESYSTEM *fs, const char *filename)
 	int new_block_index = mini_fat_allocate_new_block(fs, FILE_ENTRY_BLOCK);
 	if (new_block_index == -1)
 	{
-		fprintf(stderr, "Cannot create new file '%s': filesystem is full.\n", filename);
+		printf("Cannot create new file '%s': filesystem is full.\n", filename);
 		return NULL;
 	}
 	fs->files.push_back(fd); // Add to filesystem.
@@ -104,7 +105,7 @@ FAT_FILE * mini_file_create_file(FAT_FILESYSTEM *fs, const char *filename)
 int mini_file_size(FAT_FILESYSTEM *fs, const char *filename) {
 	FAT_FILE * fd = mini_file_find(fs, filename);
 	if (!fd) {
-		fprintf(stderr, "File '%s' does not exist.\n", filename);
+		printf("File '%s' does not exist.\n", filename);
 		return 0;
 	}
 	return fd->size;
@@ -124,16 +125,33 @@ FAT_OPEN_FILE * mini_file_open(FAT_FILESYSTEM *fs, const char *filename, const b
 	FAT_FILE * fd = mini_file_find(fs, filename);
 	if (!fd) {
 		// TODO: check if it's write mode, and if so create it. Otherwise return NULL.
-		return NULL;
+		if(is_write){
+			fd = mini_file_create_file(fs, filename);
+			if (!fd) {
+				printf("Cannot create file '%s'.\n", filename);
+				return NULL;
+			}
+		} else {
+			printf("File '%s' does not exist.\n", filename);
+			return NULL;
+		}
 	}
 
 	if (is_write) {
 		// TODO: check if other write handles are open.
-		return NULL;
+		for(int i=0; i<fd->open_handles.size(); ++i) {
+			if (fd->open_handles[i]->is_write) {
+				printf("File '%s' is already open in write mode.\n", filename);
+				return NULL;
+			}
+		}
 	}
 
 	FAT_OPEN_FILE * open_file = new FAT_OPEN_FILE;
 	// TODO: assign open_file fields.
+	open_file->position = 0;
+	open_file->is_write = is_write;
+	open_file->file = fd;
 
 	// Add to list of open handles for fd:
 	fd->open_handles.push_back(open_file);
@@ -152,7 +170,7 @@ bool mini_file_close(FAT_FILESYSTEM *fs, const FAT_OPEN_FILE * open_file)
 		return true;
 	}
 
-	fprintf(stderr, "Attempting to close file that is not open.\n");
+	printf("Attempting to close file that is not open.\n");
 	return false;
 }
 
@@ -165,6 +183,33 @@ int mini_file_write(FAT_FILESYSTEM *fs, FAT_OPEN_FILE * open_file, const int siz
 	int written_bytes = 0;
 
 	// TODO: write to file.
+	if (!open_file->is_write) {
+		printf("Attempting to write to file opened in read mode.\n");
+		return 0;
+	}
+
+	while((size - written_bytes)>0){
+		//debug("Buffer: %s", (char*)buffer + written_bytes);
+		if (open_file->position % fs->block_size == 0) {
+			// Allocate new block for file.
+			int new_block_index = mini_fat_allocate_new_block(fs, FILE_DATA_BLOCK);
+			if (new_block_index == -1) {
+				printf("Cannot write to file: filesystem is full.\n");
+				return written_bytes;
+			}
+			open_file->file->block_ids.push_back(new_block_index);
+		}
+
+		int bytes_to_write = std::min(size - written_bytes, fs->block_size - (open_file->position % fs->block_size));
+		int block_index = position_to_block_index(fs, open_file->position);
+		int block_offset = position_to_byte_index(fs, open_file->position);
+		int block_id = open_file->file->block_ids[block_index];
+		mini_fat_write_in_block(fs, block_id, block_offset, bytes_to_write, (char*)buffer + written_bytes);
+		written_bytes += bytes_to_write;
+		open_file->position += bytes_to_write;
+	}
+
+	open_file->file->size = std::max(open_file->file->size, open_file->position);
 
 	return written_bytes;
 }
@@ -177,7 +222,23 @@ int mini_file_read(FAT_FILESYSTEM *fs, FAT_OPEN_FILE * open_file, const int size
 {
 	int read_bytes = 0;
 
+	int block_index = position_to_block_index(fs, open_file->position);
+	int block_offset = position_to_byte_index(fs, open_file->position);
+
 	// TODO: read file.
+	while((size-read_bytes)>0){
+		if(block_index >= open_file->file->block_ids.size()){
+			break;
+		}
+		int block_id = open_file->file->block_ids[block_index];
+		int bytes_to_read = std::min(size - read_bytes, fs->block_size - block_offset);
+		mini_fat_read_in_block(fs, block_id, block_offset, bytes_to_read, buffer);
+		read_bytes += bytes_to_read;
+		open_file->position += bytes_to_read;
+		buffer = (char*)buffer + bytes_to_read;
+		block_index++;
+		block_offset = 0;
+	}
 
 	return read_bytes;
 }
@@ -192,8 +253,19 @@ int mini_file_read(FAT_FILESYSTEM *fs, FAT_OPEN_FILE * open_file, const int size
 bool mini_file_seek(FAT_FILESYSTEM *fs, FAT_OPEN_FILE * open_file, const int offset, const bool from_start)
 {
 	// TODO: seek and return true.
+	if (from_start) {
+		if(offset < 0 || offset > open_file->file->size){
+			return false;
+		}
+		open_file->position = offset;
+	} else {
+		if(offset + open_file->position > open_file->file->size || offset + open_file->position < 0){
+			return false;
+		}
+		open_file->position += offset;
+	}
 
-	return false;
+	return true;
 }
 
 /**
@@ -204,7 +276,29 @@ bool mini_file_seek(FAT_FILESYSTEM *fs, FAT_OPEN_FILE * open_file, const int off
  */
 bool mini_file_delete(FAT_FILESYSTEM *fs, const char *filename)
 {
+	printf("Deleting file");
 	// TODO: delete file after checks.
+	FAT_FILE * fd = mini_file_find(fs, filename);
+	
+	if (fd == NULL) {
+		printf("File '%s' does not exist.\n", filename);
+		return false;
+	}
+	if (fd->open_handles.size() > 0) {
+		printf("File '%s' is open.\n", filename);
+		return false;
+	}
 
-	return false;
+	for (int i = 0; i < fd->block_ids.size(); i++) {
+		int block_id = fd->block_ids[i];
+		fs->block_map[block_id] = EMPTY_BLOCK;
+	}
+	
+	fd->metadata_block_id = EMPTY_BLOCK;
+	// Remove from list of files.
+	vector_delete_value(fs->files, fd);
+	// Free memory.
+	delete fd;
+
+	return true;
 }
