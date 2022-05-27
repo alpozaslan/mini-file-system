@@ -7,10 +7,8 @@ First we implemented disk manipulation functions:
 * **mini_fat_create(filename, block size, block count)** to create new filesystem
 * **mini_fat_save(fs)** to save the filesystem to real file on the disk. It saves only the metadata of the filesystem.
 * **mini_fat_load(filename)** to load the fs that is previously saved.
-* **mini_fat_dump(fs)** to dump the metadata of the filesystem and metada of all files in it to the console. We use mini_file_dump function that is described in the below.
 
 Then we implemented file system manipulation functions:
-* **mini_file_dump(fs, file)** to dump metadata of the file to the console.
 * **mini_file_size(fs, filename)** to get the size of the file
 * **mini_file_open(fs, filename, is write)** to open the file
 * **mini_file_close(fs, open file)** to close the file
