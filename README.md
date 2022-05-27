@@ -9,7 +9,6 @@ First we implemented disk manipulation functions:
 * **mini_fat_load(filename)** to load the fs that is previously saved.
 
 Then we implemented file system manipulation functions:
-* **mini_file_size(fs, filename)** to get the size of the file
 * **mini_file_open(fs, filename, is write)** to open the file
 * **mini_file_close(fs, open file)** to close the file
 * **mini_file_delete(fs, filename)** to delete the file
