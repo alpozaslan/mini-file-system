@@ -41,6 +41,6 @@ After we wrote the basic functions for the file system, we added the file manipu
 
     It reads the desired byte of data from the given file to the buffer. Even if it does not reach the desired size, it stops when it reaches the end of the file. Returns how many bytes have been read.
 
-We use C file functions like fopen, fseek, fread etc. to manipulate the file.
+We use C file functions like fopen, fseek, fread etc. to manipulate the file. When opening a file we used the "rb+" option to open it as a binary file.
 
 ## All parts of the code are working well.
