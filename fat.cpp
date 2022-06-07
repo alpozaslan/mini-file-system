@@ -10,12 +10,13 @@
 #include <unistd.h>
 
 #define DEBUG 1
-inline void debug(const char * fmt, ...) {
-#if DEBUG>0
+inline void debug(const char *fmt, ...)
+{
+#if DEBUG > 0
 	va_list args;
-   va_start(args, fmt);
-   vprintf(fmt, args);
-   va_end(args);
+	va_start(args, fmt);
+	vprintf(fmt, args);
+	va_end(args);
 #endif
 }
 
@@ -33,12 +34,13 @@ int mini_fat_write_in_block(FAT_FILESYSTEM *fs, const int block_id, const int bl
 	assert(block_offset >= 0);
 	assert(block_offset < fs->block_size);
 	assert(size + block_offset <= fs->block_size);
-	//debug("mini_fat_write_in_block: block_id=%d, block_offset=%d, size=%d\n", block_id, block_offset, size);
+	// debug("mini_fat_write_in_block: block_id=%d, block_offset=%d, size=%d\n", block_id, block_offset, size);
 	int written = 0;
 
 	// TODO: write in the real file.
 	FILE *fd = fopen(fs->filename, "rb+");
-	if (fd == NULL) {
+	if (fd == NULL)
+	{
 		return -1;
 	}
 
@@ -68,9 +70,10 @@ int mini_fat_read_in_block(FAT_FILESYSTEM *fs, const int block_id, const int blo
 	int read = 0;
 
 	// TODO: read from the real file.
-	//open the file
-	FILE * fd = fopen(fs->filename, "rb");
-	if (fd == NULL) {
+	// open the file
+	FILE *fd = fopen(fs->filename, "rb");
+	if (fd == NULL)
+	{
 		return -1;
 	}
 	// set the file pointer to the block_offset
@@ -78,6 +81,7 @@ int mini_fat_read_in_block(FAT_FILESYSTEM *fs, const int block_id, const int blo
 	// read the data
 	read = fread(buffer, 1, size, fd);
 
+	fclose(fd);
 	return read;
 }
 
@@ -88,8 +92,10 @@ int mini_fat_read_in_block(FAT_FILESYSTEM *fs, const int block_id, const int blo
 int mini_fat_find_empty_block(const FAT_FILESYSTEM *fat)
 {
 	// TODO: find an empty block in fat and return its index.
-	for (int i = 0; i < fat->block_count; i++){
-		if(fat->block_map[i] == EMPTY_BLOCK){
+	for (int i = 0; i < fat->block_count; i++)
+	{
+		if (fat->block_map[i] == EMPTY_BLOCK)
+		{
 			return i;
 		}
 	}
@@ -216,18 +222,18 @@ bool mini_fat_save(const FAT_FILESYSTEM *fat)
 	// Write the block map
 	fwrite(&fat->block_map[0], sizeof(fat->block_map[0]), fat->block_count, fat_fd);
 
-	//write the file metadata of each file to their corresponding blocks
+	// write the file metadata of each file to their corresponding blocks
 	for (int i = 0; i < fat->files.size(); ++i)
-	{	
-		//set the cursor to the beginning of the file
+	{
+		// set the cursor to the beginning of the file
 		fseek(fat_fd, fat->block_size * fat->files[i]->metadata_block_id, SEEK_SET);
 
-		//write the file metadata to the file
-		//write the file name
+		// write the file metadata to the file
+		// write the file name
 		fwrite(fat->files[i]->name, sizeof(fat->files[i]->name), 1, fat_fd);
-		//write the file size
+		// write the file size
 		fwrite(&fat->files[i]->size, sizeof(fat->files[i]->size), 1, fat_fd);
-		//write the file block map
+		// write the file block map
 		fwrite(&fat->files[i]->block_ids[0], sizeof(fat->files[i]->block_ids[0]), fat->files[i]->block_ids.size(), fat_fd);
 	}
 
@@ -265,15 +271,15 @@ FAT_FILESYSTEM *mini_fat_load(const char *filename)
 		{
 			FAT_FILE *file = new FAT_FILE;
 			fseek(fat_fd, fat->block_size * i, SEEK_SET);
-			//read the file name
+			// read the file name
 			fread(file->name, sizeof(file->name), 1, fat_fd);
-			//read the file size
+			// read the file size
 			fread(&file->size, sizeof(file->size), 1, fat_fd);
-			//resize the block_ids vector to the file size
-			file->block_ids.resize(file->size/fat->block_size);
-			//read the file block_ids
+			// resize the block_ids vector to the file size
+			file->block_ids.resize(file->size / fat->block_size);
+			// read the file block_ids
 			fread(&file->block_ids[0], sizeof(file->block_ids[0]), file->size, fat_fd);
-			//set the metadata block id of the file
+			// set the metadata block id of the file
 			file->metadata_block_id = i;
 			fat->files.push_back(file);
 		}
