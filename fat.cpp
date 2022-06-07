@@ -160,7 +160,6 @@ FAT_FILESYSTEM *mini_fat_create(const char *filename, const int block_size, cons
 
 	FAT_FILESYSTEM *fat = mini_fat_create_internal(filename, block_size, block_count);
 
-	// TODO: create the corresponding virtual disk file with appropriate size.
 	// Create the file
 	FILE *f = fopen(filename, "wb");
 	if (f == NULL)

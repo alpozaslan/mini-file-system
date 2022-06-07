@@ -163,7 +163,7 @@ FAT_OPEN_FILE *mini_file_open(FAT_FILESYSTEM *fs, const char *filename, const bo
 	}
 
 	FAT_OPEN_FILE *open_file = new FAT_OPEN_FILE;
-	// TODO: assign open_file fields.
+	// assign open_file fields.
 	open_file->position = 0;
 	open_file->is_write = is_write;
 	open_file->file = fd;
@@ -279,7 +279,6 @@ int mini_file_read(FAT_FILESYSTEM *fs, FAT_OPEN_FILE *open_file, int size, void 
  */
 bool mini_file_seek(FAT_FILESYSTEM *fs, FAT_OPEN_FILE *open_file, const int offset, const bool from_start)
 {
-	// TODO: seek and return true.
 	if (from_start)
 	{
 		if (offset < 0 || offset > open_file->file->size)
@@ -309,7 +308,6 @@ bool mini_file_seek(FAT_FILESYSTEM *fs, FAT_OPEN_FILE *open_file, const int offs
 bool mini_file_delete(FAT_FILESYSTEM *fs, const char *filename)
 {
 	printf("Deleting file");
-	// TODO: delete file after checks.
 	FAT_FILE *fd = mini_file_find(fs, filename);
 
 	if (fd == NULL)
